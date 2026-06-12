@@ -1,0 +1,24 @@
+[package]
+name = "vellum_verifier"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "vellum_verifier"
+path = "src/lib.rs"
+
+[dependencies]
+soroban-sdk = { version = "26.0.1", features = ["alloc"] }
+ultrahonk_soroban_verifier = { git = "https://github.com/NethermindEth/rs-soroban-ultrahonk", package = "ultrahonk_soroban_verifier", default-features = false }
+
+[dev-dependencies]
+soroban-sdk = { version = "26.0.1", features = ["testutils", "alloc"] }
+
+[features]
+circuit-artifacts = []
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+required-features = ["circuit-artifacts"]

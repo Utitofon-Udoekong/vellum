@@ -1,0 +1,26 @@
+[package]
+name = "vellum_pool"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "vellum_pool"
+path = "src/lib.rs"
+
+[dependencies]
+soroban-sdk = { version = "26.0.1", features = ["alloc", "hazmat-address"] }
+soroban-poseidon = "26.0.0"
+
+[dev-dependencies]
+soroban-sdk = { version = "26.0.1", features = ["testutils", "alloc"] }
+vellum_verifier = { path = "../verifier" }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+circuit-artifacts = []
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+required-features = ["circuit-artifacts"]
