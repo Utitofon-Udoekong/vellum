@@ -1,0 +1,20 @@
+{
+  "name": "vellum",
+  "version": "1.0.0",
+  "description": "Vellum: Confidential Yield & Payroll Distribution Engine on Stellar",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "demo:prep": "powershell -ExecutionPolicy Bypass -File scripts/demo-prep.ps1",
+    "demo:copy-circuits": "powershell -ExecutionPolicy Bypass -File scripts/copy-circuit-artifacts.ps1",
+    "demo:deploy": "powershell -ExecutionPolicy Bypass -File scripts/deploy-testnet.ps1",
+    "circuit:populate": "pnpm --filter web exec node scripts/populate-withdraw-prover.mjs",
+    "circuit:build": "pnpm circuit:populate && wsl -e bash /mnt/c/Users/utito/Documents/projects/hackathons/vellum/scripts/build-circuits-wsl.sh",
+    "circuit:build:sh": "bash circuits/scripts/build_all.sh",
+    "toolchain:install": "wsl -e bash /mnt/c/Users/utito/Documents/projects/hackathons/vellum/scripts/install-toolchain-wsl.sh",
+    "contract:build": "cargo build -p vellum_verifier -p vellum_pool --target wasm32v1-none --release",
+    "contract:test": "cargo test -p vellum_verifier -p vellum_pool --release",
+    "contract:test:full": "cargo test -p vellum_verifier -p vellum_pool --release --features circuit-artifacts",
+    "e2e:local": "just e2e"
+  }
+}
