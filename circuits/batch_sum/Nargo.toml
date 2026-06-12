@@ -1,0 +1,6 @@
+[package]
+name = "vellum_batch_sum"
+type = "bin"
+authors = ["vellum"]
+
+[dependencies]
