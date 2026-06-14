@@ -15,3 +15,7 @@ test_snapshots/
 .cursor/
 .specstory/
 .cursorindexingignore
+.cursorrules
+AGENTS.md
+**/prompts/
+**/*.mdc
