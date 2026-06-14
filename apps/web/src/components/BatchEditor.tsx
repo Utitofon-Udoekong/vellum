@@ -3,15 +3,18 @@ import {
   BATCH_MAX,
   newBatchRow,
   parsePayrollCsv,
-  sumAmounts,
+  sumHumanAmounts,
   validatePayeeAddress,
   type BatchRow,
 } from "../payroll";
+import { formatTokenAmount, tryParseHumanAmount } from "../token-amount";
 
 interface BatchEditorProps {
   rows: BatchRow[];
   manualTotal: boolean;
   totalOverride: string;
+  tokenDecimals: number;
+  tokenSymbol: string;
   onRowsChange: (rows: BatchRow[]) => void;
   onManualTotalChange: (manual: boolean) => void;
   onTotalOverrideChange: (total: string) => void;
@@ -21,14 +24,18 @@ export function BatchEditor({
   rows,
   manualTotal,
   totalOverride,
+  tokenDecimals,
+  tokenSymbol,
   onRowsChange,
   onManualTotalChange,
   onTotalOverrideChange,
 }: BatchEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const autoTotal = sumAmounts(rows);
+  const autoTotalStroops = sumHumanAmounts(rows, tokenDecimals);
+  const autoTotalLabel = formatTokenAmount(autoTotalStroops, tokenDecimals);
+  const manualStroops = tryParseHumanAmount(totalOverride, tokenDecimals);
   const totalMismatch =
-    manualTotal && totalOverride.trim() !== "" && BigInt(totalOverride) !== autoTotal;
+    manualTotal && totalOverride.trim() !== "" && manualStroops !== null && manualStroops !== autoTotalStroops;
 
   const updateRow = (id: string, patch: Partial<BatchRow>) => {
     onRowsChange(
@@ -96,7 +103,7 @@ export function BatchEditor({
       <div className="batch__table">
         <div className="batch__head">
           <span>Address</span>
-          <span>Amount</span>
+          <span>Amount ({tokenSymbol})</span>
           <span />
         </div>
         {rows.map((row) => (
@@ -111,7 +118,7 @@ export function BatchEditor({
               value={row.amount}
               onChange={(e) => updateRow(row.id, { amount: e.target.value })}
               placeholder="0"
-              inputMode="numeric"
+              inputMode="decimal"
             />
             <button type="button" className="batch__remove" onClick={() => removeRow(row.id)} aria-label="Remove">
               ×
@@ -135,13 +142,19 @@ export function BatchEditor({
             className={`batch__total-manual ${totalMismatch ? "batch__total-input--warn" : ""}`}
             value={totalOverride}
             onChange={(e) => onTotalOverrideChange(e.target.value)}
-            inputMode="numeric"
-            placeholder={autoTotal.toString()}
+            inputMode="decimal"
+            placeholder={autoTotalLabel}
           />
         ) : (
-          <output className="batch__total-value">{autoTotal.toString()}</output>
+          <output className="batch__total-value">
+            {autoTotalLabel} {tokenSymbol}
+          </output>
         )}
-        {totalMismatch && <span className="batch__error">Must equal sum of rows ({autoTotal.toString()})</span>}
+        {totalMismatch && (
+          <span className="batch__error">
+            Must equal sum of rows ({autoTotalLabel} {tokenSymbol})
+          </span>
+        )}
       </div>
     </div>
   );
