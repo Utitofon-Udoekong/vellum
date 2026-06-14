@@ -11,7 +11,7 @@ $WithdrawVk = Join-Path $Root "circuits/withdraw/target/vk"
 $BatchVk = Join-Path $Root "circuits/batch_sum/target/vk"
 
 if (-not (Test-Path $WithdrawVk)) {
-    Write-Host "Missing withdraw VK — run: pnpm circuit:build"
+    Write-Host "Missing withdraw VK - run: pnpm circuit:build"
     exit 1
 }
 
@@ -31,7 +31,7 @@ Write-Host "Deploying batch sum verifier..."
 stellar contract deploy --wasm $VerifierWasm --source alice --network local `
     --alias vellum-batch-verifier -- --vk_bytes-file-path $BatchVk
 
-Write-Host "Deploying Vellum pool (set verifier IDs from output above)..."
+Write-Host "Deploying Vellum pool (pass verifier IDs as constructor args)..."
 stellar contract deploy --wasm $PoolWasm --source alice --network local --alias vellum-pool
 
 Write-Host "Save contract IDs to .env.local for the web UI."
