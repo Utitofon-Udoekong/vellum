@@ -29,6 +29,16 @@ export function validatePayeeAddress(address: string): string | undefined {
   return undefined;
 }
 
+import { tryParseHumanAmount } from "./token-amount";
+
+/** Sum row amounts parsed as human token units → stroops. */
+export function sumHumanAmounts(rows: BatchRow[], decimals: number): bigint {
+  return rows.reduce((sum, row) => {
+    const parsed = tryParseHumanAmount(row.amount, decimals);
+    return parsed === null ? sum : sum + parsed;
+  }, 0n);
+}
+
 export function sumAmounts(rows: BatchRow[]): bigint {
   return rows.reduce((sum, row) => {
     const trimmed = row.amount.trim();
