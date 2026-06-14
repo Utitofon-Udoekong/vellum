@@ -11,7 +11,7 @@ pnpm circuit:build
 
 # 2. Install Stellar CLI + add your distributor key (prompts for secret locally)
 cargo install --locked stellar-cli
-stellar keys add distributor --network testnet
+stellar keys add distributor
 
 # 3. Full prep: build, copy circuits, deploy testnet, write .env.local
 pnpm demo:prep

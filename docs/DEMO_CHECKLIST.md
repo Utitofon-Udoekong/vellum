@@ -5,7 +5,7 @@
 ## One-time prep (before recording)
 
 - [ ] `pnpm toolchain:install` + `pnpm circuit:build`
-- [ ] Stellar CLI + `stellar keys add distributor --network testnet`
+- [ ] Stellar CLI + `stellar keys add distributor`
 - [ ] `pnpm demo:prep` (builds WASM, copies circuit JSON, deploys, writes `apps/web/.env.local`)
 - [ ] `pnpm dev` — verify http://localhost:3000 loads
 
