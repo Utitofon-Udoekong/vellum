@@ -134,8 +134,8 @@ if (-not (Test-Path $VerifierWasm)) {
     Pop-Location
 }
 
-$DistributorG = "GDNKKY4KRFAUAMCG4AFIUZT3I2PFWB34GG2DWF6O2BZYE2L2ZWCMXLPR"
-$EmployeeG = "GAL7PHYRX7GOTU52FOHMUIOYD3JXU6UUE5Q65YQJZBEAF4NZFWI2XGHX"
+$DistributorG = (Invoke-Stellar keys address $Source).Trim()
+Write-Host "Company wallet (distributor): $DistributorG"
 
 # Issuer must differ from the company wallet: issuers cannot hold their own asset.
 $IssuerG = Ensure-IssuerKey
@@ -157,11 +157,12 @@ if ($trust.ExitCode -ne 0 -and $trust.Text -notmatch "already exists|ExistingVal
 }
 
 Write-Host "Minting test tokens to company wallet..."
+# SAC mint amount is stroops (7 decimals): 10_000_000_000 = 1,000 VELLUM
 Invoke-Stellar contract invoke `
     --id vellum-token `
     --network $Network `
     --source $Source `
-    '--' mint --to $DistributorG --amount 1000000
+    '--' mint --to $DistributorG --amount 10000000000
 
 Write-Host "Deploying withdraw verifier..."
 $withdrawDeployOut = Invoke-Stellar contract deploy `
@@ -189,24 +190,6 @@ $poolDeployOut = Invoke-Stellar contract deploy `
     --alias vellum-pool `
     '--' --admin $DistributorG --token $TokenId --withdraw_verifier $WithdrawVerifier --batch_verifier $BatchVerifier
 $PoolId = Get-ContractIdFromOutput $poolDeployOut
-
-Write-Host "Funding demo employee account (XLM for trustline + withdraw fees)..."
-# Amounts in stroops (1 XLM = 10_000_000 stroops).
-$employeeFunding = Invoke-StellarRaw tx new payment `
-    --network $Network `
-    --source $Source `
-    --destination $EmployeeG `
-    --amount 500000000
-if ($employeeFunding.ExitCode -ne 0 -and $employeeFunding.Text -match "NoDestination") {
-    Write-Host "Employee account not on network yet - creating with 50 XLM..."
-    Invoke-Stellar tx new create-account `
-        --network $Network `
-        --source $Source `
-        --destination $EmployeeG `
-        --starting-balance 500000000
-} elseif ($employeeFunding.ExitCode -ne 0) {
-    throw "Employee funding failed:`n$($employeeFunding.Text)"
-}
 
 @"
 VITE_STELLAR_NETWORK=testnet

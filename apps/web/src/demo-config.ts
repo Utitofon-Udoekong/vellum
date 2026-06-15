@@ -1,12 +1,5 @@
 /** Public demo configuration — safe to commit. Secrets stay in the UI session only. */
 
-export const DISTRIBUTOR_G =
-  "GDNKKY4KRFAUAMCG4AFIUZT3I2PFWB34GG2DWF6O2BZYE2L2ZWCMXLPR";
-
-/** Default demo payee — any Freighter G-address works with hash(pubkey) leaves. */
-export const DEMO_EMPLOYEE_G =
-  "GAL7PHYRX7GOTU52FOHMUIOYD3JXU6UUE5Q65YQJZBEAF4NZFWI2XGHX";
-
 export const DEFAULT_POOL_ID = import.meta.env.VITE_POOL_CONTRACT_ID ?? "";
 export const DEFAULT_TOKEN_ID = import.meta.env.VITE_TOKEN_CONTRACT_ID ?? "";
 

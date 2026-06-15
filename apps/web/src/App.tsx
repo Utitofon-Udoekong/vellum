@@ -6,7 +6,7 @@ import { generateProof, prewarmWithdrawProving } from "./proof";
 import { loadBatchSumCircuit, loadWithdrawCircuit } from "./circuits";
 import { buildBatchSumWitness, buildWithdrawWitness } from "./witness";
 import { recipientIdFromAddress, splitPubkeyLimbs } from "./pubkey";
-import { DEFAULT_POOL_ID, DEFAULT_TOKEN_ID, DEMO_EMPLOYEE_G, DISTRIBUTOR_G, NETWORK_LABEL } from "./demo-config";
+import { DEFAULT_POOL_ID, DEFAULT_TOKEN_ID, NETWORK_LABEL } from "./demo-config";
 import { describePoolContractError, isBatchFinalizedError, isCommitmentExistsError } from "./pool-errors";
 import { addressScVal, bytesScVal, i128ScVal, invokeContractWallet, readPoolBatchStatus, readPoolCommitmentCount, readPoolFinalizedRoot, readPoolTotalDeposited, readTokenBalance, readTokenDecimals, readTokenSymbol } from "./stellar";
 import { useFreighter } from "./hooks/useFreighter";
@@ -32,14 +32,12 @@ interface PoolBatchSummary {
 }
 
 export default function App() {
-  const company = useFreighter({ requiredAddress: DISTRIBUTOR_G });
+  const company = useFreighter();
 
   const [mode, setMode] = useState<Mode>("company");
   const [log, setLog] = useState("");
   const [activity, setActivity] = useState("");
-  const [batchRows, setBatchRows] = useState<BatchRow[]>([
-    newBatchRow({ payeeAddress: DEMO_EMPLOYEE_G, amount: "100" }),
-  ]);
+  const [batchRows, setBatchRows] = useState<BatchRow[]>([newBatchRow()]);
   const [manualTotal, setManualTotal] = useState(false);
   const [totalOverride, setTotalOverride] = useState("");
   const [poolId, setPoolId] = useState(DEFAULT_POOL_ID);
@@ -117,7 +115,7 @@ export default function App() {
     setPoolSummary(null);
     setEmployeeTrustlineDone(false);
     setWithdrawCrsReady(false);
-    setBatchRows([newBatchRow({ payeeAddress: DEMO_EMPLOYEE_G, amount: "100" })]);
+    setBatchRows([newBatchRow()]);
     setManualTotal(false);
     setTotalOverride("");
   }, []);
@@ -225,7 +223,7 @@ export default function App() {
   }, [poolId, syncEmployerSession]);
 
   useEffect(() => {
-    if (company.address !== DISTRIBUTOR_G) return;
+    if (!company.address) return;
     void syncEmployerSession({ announce: true });
   }, [company.address, syncEmployerSession]);
 
@@ -247,7 +245,7 @@ export default function App() {
   }, [tokenId]);
 
   const refreshCompanyBalance = useCallback(async () => {
-    if (!tokenId || company.address !== DISTRIBUTOR_G) {
+    if (!tokenId || !company.address) {
       setCompanyTokenBalance(null);
       return;
     }
@@ -311,9 +309,9 @@ export default function App() {
     }
   };
 
-  const requireCompanyAdmin = (): boolean => {
-    if (company.address !== DISTRIBUTOR_G) {
-      append("Open Freighter and select the company admin wallet, then try again.");
+  const requireCompanyConnected = (): boolean => {
+    if (!company.address) {
+      append("Connect the company wallet in Freighter, then try again.");
       return false;
     }
     return true;
@@ -496,7 +494,7 @@ export default function App() {
   };
 
   const distributorDepositAll = async () => {
-    if (!poolId || !requireCompanyAdmin()) return;
+    if (!poolId || !requireCompanyConnected()) return;
     if (!onChainCommitments.length) return append("Prepare first");
     const chainStatus = await syncPoolFromChain();
     if (chainStatus === 1 || batchFinalized) {
@@ -513,7 +511,7 @@ export default function App() {
         for (let j = 0; j < bytes.length; j++) bytes[j] = parseInt(hex.slice(j * 2, j * 2 + 2), 16);
         try {
           const hash = await invokeContractWallet(
-            DISTRIBUTOR_G,
+            company.address!,
             poolId,
             "deposit",
             [bytesScVal(bytes)],
@@ -546,7 +544,7 @@ export default function App() {
   };
 
   const distributorFinalize = async () => {
-    if (!poolId || !requireCompanyAdmin()) return;
+    if (!poolId || !requireCompanyConnected()) return;
     const notes = storedNotes.length ? storedNotes : (loadPayrollSession(poolId)?.notes ?? []);
     if (!notes.length) return append("Prepare first");
 
@@ -571,7 +569,7 @@ export default function App() {
       );
       setStatus("Proof ready — approve finalize batch in Freighter…");
       const hash = await invokeContractWallet(
-        DISTRIBUTOR_G,
+        company.address!,
         poolId,
         "finalize_batch",
         [i128ScVal(total), bytesScVal(publicInputs), bytesScVal(proof)],
@@ -721,8 +719,8 @@ export default function App() {
           : `Pool finalized but no saved batch in this browser. ${RESTORE_NOTES_HINT} ${NEW_PAYROLL_HINT}`
     : !batchPrepared
       ? "Step 1 — Prepare builds commitments locally (no wallet needed)."
-      : company.address !== DISTRIBUTOR_G
-        ? "Step 2 — Open Freighter, select the company wallet, then Deposit."
+      : !company.address
+        ? "Step 2 — Connect the company wallet in Freighter, then Deposit."
         : !batchDeposited
           ? "Step 2 — Deposit posts each commitment (one Freighter approval per payee)."
           : !batchFinalized
@@ -818,13 +816,12 @@ export default function App() {
               label="Company"
               address={company.address}
               freighterActive={company.freighterActive}
-              expectedAddress={DISTRIBUTOR_G}
               connecting={company.connecting}
               available={company.available}
               onConnect={connectCompany}
               onDisconnect={company.disconnect}
             />
-            {company.address === DISTRIBUTOR_G && tokenId && companyTokenBalance !== null && (
+            {company.address && tokenId && companyTokenBalance !== null && (
               <p className="company-balance">
                 Payout token balance · {fmtAmount(companyTokenBalance)}
               </p>

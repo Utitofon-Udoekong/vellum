@@ -8,7 +8,7 @@ use soroban_sdk::{
 use vellum_pool::{VellumPool, VellumPoolClient};
 use vellum_verifier::UltraHonkVerifierContract;
 
-fn fund_demo_employee_account(env: &Env, pubkey: [u8; 32]) {
+fn fund_test_account(env: &Env, pubkey: [u8; 32]) {
     let account_id = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256(pubkey)));
     let key = Rc::new(xdr::LedgerKey::Account(xdr::LedgerKeyAccount {
         account_id: account_id.clone(),
@@ -34,14 +34,14 @@ fn fund_demo_employee_account(env: &Env, pubkey: [u8; 32]) {
     }
 }
 
-const DEMO_EMPLOYEE_PUBKEY: [u8; 32] = [
+const TEST_WITHDRAW_PUBKEY: [u8; 32] = [
     0x0f, 0x28, 0xa4, 0x1a, 0x5b, 0x3a, 0xbb, 0x29, 0x98, 0xe6, 0x3e, 0x82, 0x76, 0xdf, 0x7d,
     0xc1, 0x1d, 0xba, 0x70, 0x8f, 0x69, 0xc3, 0xf6, 0xc7, 0x05, 0x00, 0x37, 0x12, 0xba, 0xfe,
     0x20, 0xaf,
 ];
 
 // leaf = Poseidon(recipient_id, amount, salt) where recipient_id = Poseidon(pubkey_lo, pubkey_hi)
-const DEMO_LEAF_COMMITMENT: [u8; 32] = [
+const TEST_LEAF_COMMITMENT: [u8; 32] = [
     0x1d, 0xac, 0x9c, 0x85, 0xf7, 0xfd, 0x08, 0x36, 0xf6, 0x85, 0xcb, 0x99, 0xf4, 0x1a, 0x29,
     0x78, 0x98, 0x28, 0x12, 0x2d, 0xbe, 0xba, 0xc9, 0xf7, 0x45, 0xe0, 0xc2, 0x49, 0x9d, 0x37,
     0xb9, 0xb3,
@@ -67,10 +67,10 @@ fn pool_finalize_and_withdraw_flow() {
     let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &token);
     token_admin.mint(&admin, &10_000);
 
-    fund_demo_employee_account(&env, DEMO_EMPLOYEE_PUBKEY);
+    fund_test_account(&env, TEST_WITHDRAW_PUBKEY);
     let employee = AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(
         &env,
-        &DEMO_EMPLOYEE_PUBKEY,
+        &TEST_WITHDRAW_PUBKEY,
     ))
     .to_address(&env);
     token_admin.trust(&employee);
@@ -95,7 +95,7 @@ fn pool_finalize_and_withdraw_flow() {
     );
     let pool = VellumPoolClient::new(&env, &pool_id);
 
-    let commitment = BytesN::from_array(&env, &DEMO_LEAF_COMMITMENT);
+    let commitment = BytesN::from_array(&env, &TEST_LEAF_COMMITMENT);
     pool.deposit(&commitment);
 
     pool.finalize_batch(

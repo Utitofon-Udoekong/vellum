@@ -12,6 +12,66 @@ function hashPairFields(api: BarretenbergSync, left: bigint, right: bigint): big
   return frToField(poseidon2Hash(api, [left, right]));
 }
 
+/** Perfect subtree over `2^level` consecutive leaves starting at `start`. */
+function hashPerfectSubtree(
+  api: BarretenbergSync,
+  leafFields: bigint[],
+  start: number,
+  level: number,
+): bigint {
+  if (level === 0) {
+    return leafFields[start]!;
+  }
+  const half = 1 << (level - 1);
+  const left = hashPerfectSubtree(api, leafFields, start, level - 1);
+  const right = hashPerfectSubtree(api, leafFields, start + half, level - 1);
+  return hashPairFields(api, left, right);
+}
+
+/** Root of the sibling subtree at `level` (may be partial when `n` is not a power of two). */
+function subtreeRootAtLevel(
+  api: BarretenbergSync,
+  zeroes: bigint[],
+  leafFields: bigint[],
+  n: number,
+  start: number,
+  level: number,
+): bigint {
+  const width = 1 << level;
+  if (start >= n) {
+    return zeroes[level];
+  }
+  if (start + width <= n) {
+    return hashPerfectSubtree(api, leafFields, start, level);
+  }
+  if (level === 0) {
+    return leafFields[start]!;
+  }
+  const half = width >> 1;
+  const left = subtreeRootAtLevel(api, zeroes, leafFields, n, start, level - 1);
+  const right = subtreeRootAtLevel(api, zeroes, leafFields, n, start + half, level - 1);
+  return hashPairFields(api, left, right);
+}
+
+/** Merkle path for `leafIndex` against the final root after all `n` incremental inserts. */
+function merklePathForFinalRoot(
+  api: BarretenbergSync,
+  zeroes: bigint[],
+  leafFields: bigint[],
+  leafIndex: number,
+): { siblings: bigint[]; bits: number[] } {
+  const n = leafFields.length;
+  const siblings: bigint[] = [];
+  const bits: number[] = [];
+  for (let level = 0; level < TREE_DEPTH; level++) {
+    const bit = (leafIndex >> level) & 1;
+    bits.push(bit);
+    const siblingStart = ((leafIndex >> level) ^ 1) << level;
+    siblings.push(subtreeRootAtLevel(api, zeroes, leafFields, n, siblingStart, level));
+  }
+  return { siblings, bits };
+}
+
 export async function buildZeroes(): Promise<bigint[]> {
   const api = await initPoseidon();
   const zeroes: bigint[] = [0n];
@@ -57,27 +117,25 @@ export async function simulateIncrementalInserts(
   const paths: Array<{ siblings: bigint[]; bits: number[] }> = [];
   let root = 0n;
 
-  for (let insIdx = 0; insIdx < leaves.length; insIdx++) {
-    let cur = frToField(bytesToFr(leaves[insIdx]));
-    const siblings: bigint[] = [];
-    const bits: number[] = [];
+  const leafFields = leaves.map((leaf) => frToField(bytesToFr(leaf)));
 
+  for (let insIdx = 0; insIdx < leaves.length; insIdx++) {
+    let cur = leafFields[insIdx];
     for (let i = 0; i < TREE_DEPTH; i++) {
       const bit = (insIdx >> i) & 1;
-      bits.push(bit);
       if (bit === 0) {
-        siblings.push(zeroes[i]);
         frontier[i] = cur;
         cur = hashPairFields(api, cur, zeroes[i]);
       } else {
         const left = frontier[i] ?? zeroes[i];
-        siblings.push(left);
         cur = hashPairFields(api, left, cur);
       }
     }
-
     root = cur;
-    paths.push({ siblings, bits });
+  }
+
+  for (let leafIndex = 0; leafIndex < leaves.length; leafIndex++) {
+    paths.push(merklePathForFinalRoot(api, zeroes, leafFields, leafIndex));
   }
 
   return { root: fieldToBytes(root), paths };

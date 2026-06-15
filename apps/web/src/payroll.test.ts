@@ -5,7 +5,7 @@ describe("payroll", () => {
   it("parses csv rows", () => {
     const csv = `address,amount
 GAL7PHYRX7GOTU52FOHMUIOYD3JXU6UUE5Q65YQJZBEAF4NZFWI2XGHX,100
-GDNKKY4KRFAUAMCG4AFIUZT3I2PFWB34GG2DWF6O2BZYE2L2ZWCMXLPR,250`;
+GCOZFZHWB6CEVXWHUR7P7RJJSFR2USUCEKVAP7BTUMWPC77VMXYXCIRR,250`;
     const rows = parsePayrollCsv(csv);
     expect(rows).toHaveLength(2);
     expect(rows[0].amount).toBe("100");
