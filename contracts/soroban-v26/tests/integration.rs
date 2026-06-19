@@ -110,3 +110,74 @@ fn pool_finalize_and_withdraw_flow() {
         &Bytes::from_slice(&env, withdraw_proof),
     );
 }
+
+#[test]
+fn withdraw_wrong_employee_rejected() {
+    let withdraw_vk: &[u8] = include_bytes!("../../../circuits/withdraw/target/vk");
+    let withdraw_proof: &[u8] = include_bytes!("../../../circuits/withdraw/target/proof");
+    let withdraw_inputs: &[u8] = include_bytes!("../../../circuits/withdraw/target/public_inputs");
+
+    let batch_vk: &[u8] = include_bytes!("../../../circuits/batch_sum/target/vk");
+    let batch_proof: &[u8] = include_bytes!("../../../circuits/batch_sum/target/proof");
+    let batch_inputs: &[u8] = include_bytes!("../../../circuits/batch_sum/target/public_inputs");
+
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    env.mock_all_auths();
+
+    let admin = soroban_sdk::Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let token = sac.address();
+    let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_admin.mint(&admin, &10_000);
+
+    fund_test_account(&env, TEST_WITHDRAW_PUBKEY);
+    let employee = AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(
+        &env,
+        &TEST_WITHDRAW_PUBKEY,
+    ))
+    .to_address(&env);
+    token_admin.trust(&employee);
+
+    let withdraw_verifier_id = env.register(
+        UltraHonkVerifierContract,
+        (Bytes::from_slice(&env, withdraw_vk),),
+    );
+    let batch_verifier_id = env.register(
+        UltraHonkVerifierContract,
+        (Bytes::from_slice(&env, batch_vk),),
+    );
+
+    let pool_id = env.register(
+        VellumPool,
+        (
+            admin.clone(),
+            token.clone(),
+            withdraw_verifier_id,
+            batch_verifier_id,
+        ),
+    );
+    let pool = VellumPoolClient::new(&env, &pool_id);
+
+    let commitment = BytesN::from_array(&env, &TEST_LEAF_COMMITMENT);
+    pool.deposit(&commitment);
+
+    pool.finalize_batch(
+        &350,
+        &Bytes::from_slice(&env, batch_inputs),
+        &Bytes::from_slice(&env, batch_proof),
+    );
+
+    let attacker = soroban_sdk::Address::generate(&env);
+    let err = pool
+        .try_withdraw(
+            &attacker,
+            &Bytes::from_slice(&env, withdraw_inputs),
+            &Bytes::from_slice(&env, withdraw_proof),
+        )
+        .expect_err("wrong employee should be rejected");
+    assert_eq!(
+        err,
+        Ok(vellum_pool::contract::PoolError::InvalidRecipient)
+    );
+}

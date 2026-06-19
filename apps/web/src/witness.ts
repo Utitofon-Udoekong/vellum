@@ -16,6 +16,7 @@ export interface WithdrawWitness {
   root: string;
   nullifier_hash: string;
   amount: string;
+  recipient_id: string;
   pubkey_lo: string;
   pubkey_hi: string;
   priv_key: string;
@@ -101,7 +102,13 @@ export async function assertWithdrawWitness(witness: WithdrawWitness): Promise<v
     throw new Error("Withdraw witness nullifier does not match private key and salt.");
   }
 
-  const leaf = hash3Fields(api, hash2Fields(api, lo, hi), amount, salt);
+  const computedRecipientId = hash2Fields(api, lo, hi);
+  const expectedRecipientId = parseField(witness.recipient_id);
+  if (computedRecipientId !== expectedRecipientId) {
+    throw new Error("Withdraw witness recipient_id does not match pubkey limbs.");
+  }
+
+  const leaf = hash3Fields(api, computedRecipientId, amount, salt);
   const siblings = witness.path_siblings.map((s) => BigInt(s));
   const bits = witness.path_bits.map((b) => Number(b));
   if (siblings.length !== TREE_DEPTH || bits.length !== TREE_DEPTH) {
@@ -180,11 +187,13 @@ export async function buildWithdrawWitness(
   }
 
   const nullifierFr = poseidon2Hash(api, [note.privKey, note.salt]);
+  const recipientId = hash2Fields(api, pubkeyLo, pubkeyHi);
 
   const witness: WithdrawWitness = {
     root: frToField(bytesToFr(root)).toString(),
     nullifier_hash: frToField(nullifierFr).toString(),
     amount: note.amount.toString(),
+    recipient_id: recipientId.toString(),
     pubkey_lo: pubkeyLo.toString(),
     pubkey_hi: pubkeyHi.toString(),
     priv_key: note.privKey.toString(),
@@ -208,10 +217,11 @@ export async function buildBatchSumWitness(amounts: bigint[]): Promise<BatchSumW
 }
 
 export function packWithdrawPublicInputs(witness: WithdrawWitness): Uint8Array {
-  const out = new Uint8Array(96);
+  const out = new Uint8Array(128);
   writeFieldBytes(out, 0, frToBytes(fieldToFr(parseField(witness.root))));
   writeField(out, 32, parseField(witness.nullifier_hash));
   writeField(out, 64, parseField(witness.amount));
+  writeField(out, 96, parseField(witness.recipient_id));
   return out;
 }
 

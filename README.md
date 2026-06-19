@@ -29,10 +29,17 @@ Auditor  → Reveal leaf off-chain → verify hash matches deposit event
 
 **ZK circuits**
 
-- `circuits/withdraw` — Merkle inclusion + nullifier (depth 20, 96-byte public inputs)
+- `circuits/withdraw` — Merkle inclusion + nullifier + **recipient binding** (depth 20, **128-byte** public inputs: `root | nullifier_hash | amount | recipient_id`)
 - `circuits/batch_sum` — proves `sum(amounts) == total` (up to 8 slots)
 
 Proofs are generated **in the browser** (Noir WASM + Barretenberg). Private witness data (amounts, salts, Merkle paths) never leaves the client except inside the proof.
+
+## Security model
+
+- **Batch root binding** — withdraw proofs must match the finalized Merkle root stored on-chain.
+- **Recipient binding** — `recipient_id = Poseidon2(pubkey_lo, pubkey_hi)` is a public input; the contract derives it from the tx signer and rejects mismatches before verifying the proof. A stolen proof cannot be replayed by another address.
+- **Nullifier** — each leaf can withdraw once; nullifier is set before token transfer (checks-effects-interactions).
+- **Batch solvency** — finalize requires a ZK proof that deposited commitments sum to the escrowed total.
 
 ## Privacy model
 
@@ -40,7 +47,7 @@ Proofs are generated **in the browser** (Noir WASM + Barretenberg). Private witn
 |-------|-----------------|--------|
 | `deposit` | commitment hash, leaf index | recipient, amount, salt |
 | `finalize_batch` | total, Merkle root, count | individual amounts |
-| `withdraw` | nullifier, amount (in proof); payee = tx signer | link to leaf index / path; other employees' pay |
+| `withdraw` | nullifier, amount, `recipient_id` (in proof); payee = tx signer (must match `recipient_id`) | link to leaf index / path; other employees' pay |
 | Auditor reveal | — (off-chain) | all other employees' pay |
 
 ## Prerequisites
@@ -127,7 +134,7 @@ Open **http://localhost:3000**. All demo steps below happen in the browser — n
 
 - Keep the browser tab open while proofs generate.
 - On-chain data alone cannot recover payee rows; employees need the same browser session (or exported session data) used at Prepare time.
-- For a clean re-run: **New payroll session** or re-run `pnpm demo:prep` and update pool/token IDs in settings (`···`).
+- For a clean re-run: **New payroll session** or re-run `pnpm demo:prep` and update pool/token IDs in settings (`···`). Redeploy is required after circuit or pool contract changes (new withdraw VK + pool).
 
 ## Local development
 

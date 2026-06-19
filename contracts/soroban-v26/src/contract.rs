@@ -2,8 +2,9 @@ extern crate alloc;
 
 use crate::merkle;
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, symbol_short, Address, Bytes,
-    BytesN, Env, IntoVal, InvokeError, Symbol, Vec as SorobanVec,
+    address_payload::AddressPayload, contract, contracterror, contractevent, contractimpl,
+    contracttype, symbol_short, Address, Bytes, BytesN, Env, IntoVal, InvokeError, Symbol,
+    Vec as SorobanVec,
 };
 const PROOF_BYTES: usize = 456 * 32;
 
@@ -90,22 +91,35 @@ fn key_nullifier_prefix() -> Symbol {
     symbol_short!("nf")
 }
 
-const WITHDRAW_PUBLIC_INPUTS_LEN: u32 = 96;
+const WITHDRAW_PUBLIC_INPUTS_LEN: u32 = 128;
 const BATCH_SUM_PUBLIC_INPUTS_LEN: u32 = 32;
 
-fn parse_withdraw_public_inputs(bytes: &Bytes) -> Result<([u8; 32], [u8; 32], [u8; 32]), PoolError> {
+fn parse_withdraw_public_inputs(
+    bytes: &Bytes,
+) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32]), PoolError> {
     if bytes.len() != WITHDRAW_PUBLIC_INPUTS_LEN {
         return Err(PoolError::InvalidPublicInputs);
     }
-    let mut buf = [0u8; 96];
+    let mut buf = [0u8; 128];
     bytes.copy_into_slice(&mut buf);
     let mut root = [0u8; 32];
     let mut nullifier_hash = [0u8; 32];
     let mut amount = [0u8; 32];
+    let mut recipient_id = [0u8; 32];
     root.copy_from_slice(&buf[..32]);
     nullifier_hash.copy_from_slice(&buf[32..64]);
     amount.copy_from_slice(&buf[64..96]);
-    Ok((root, nullifier_hash, amount))
+    recipient_id.copy_from_slice(&buf[96..128]);
+    Ok((root, nullifier_hash, amount, recipient_id))
+}
+
+fn recipient_id_from_address(env: &Env, employee: &Address) -> Result<BytesN<32>, PoolError> {
+    match employee.to_payload() {
+        Some(AddressPayload::AccountIdPublicKeyEd25519(pk)) => {
+            Ok(merkle::recipient_id_from_ed25519_pubkey(env, &pk))
+        }
+        _ => Err(PoolError::InvalidRecipient),
+    }
 }
 
 fn parse_batch_total(bytes: &Bytes) -> Result<[u8; 32], PoolError> {
@@ -298,7 +312,8 @@ impl VellumPool {
             return Err(PoolError::VerificationFailed);
         }
 
-        let (root_arr, nf_arr, amount_arr) = parse_withdraw_public_inputs(&public_inputs)?;
+        let (root_arr, nf_arr, amount_arr, recipient_id_arr) =
+            parse_withdraw_public_inputs(&public_inputs)?;
 
         let nullifier_hash = BytesN::from_array(&env, &nf_arr);
         let nf_key = (key_nullifier_prefix(), nullifier_hash.clone());
@@ -314,6 +329,12 @@ impl VellumPool {
             .ok_or(PoolError::RootMismatch)?;
         if finalized_root != root_from_proof {
             return Err(PoolError::RootMismatch);
+        }
+
+        let expected_recipient = recipient_id_from_address(&env, &employee)?;
+        let recipient_from_proof = BytesN::from_array(&env, &recipient_id_arr);
+        if expected_recipient != recipient_from_proof {
+            return Err(PoolError::InvalidRecipient);
         }
 
         let withdraw_verifier: Address = env
@@ -339,6 +360,11 @@ impl VellumPool {
             return Err(PoolError::InsufficientEscrow);
         }
 
+        env.storage().instance().set(&nf_key, &true);
+        env.storage()
+            .instance()
+            .set(&key_total_withdrawn(), &(total_withdrawn + amount));
+
         let token: Address = env
             .storage()
             .instance()
@@ -347,11 +373,6 @@ impl VellumPool {
         let contract_addr = env.current_contract_address();
         let token_client = soroban_sdk::token::Client::new(&env, &token);
         token_client.transfer(&contract_addr, &employee, &amount);
-
-        env.storage().instance().set(&nf_key, &true);
-        env.storage()
-            .instance()
-            .set(&key_total_withdrawn(), &(total_withdrawn + amount));
 
         WithdrawEvent {
             nullifier_hash: &nullifier_hash,

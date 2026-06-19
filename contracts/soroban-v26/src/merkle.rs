@@ -31,6 +31,28 @@ pub fn poseidon2_hash2(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> 
     BytesN::from_array(env, &out_arr)
 }
 
+fn u128_limb_to_field_bytes(limb: u128) -> [u8; 32] {
+    let mut arr = [0u8; 32];
+    arr[16..32].copy_from_slice(&limb.to_be_bytes());
+    arr
+}
+
+/// Poseidon2(lo, hi) where lo/hi are big-endian u128 limbs of an Ed25519 pubkey.
+pub fn recipient_id_from_ed25519_pubkey(env: &Env, pubkey: &BytesN<32>) -> BytesN<32> {
+    let pk = pubkey.to_array();
+    let mut lo: u128 = 0;
+    let mut hi: u128 = 0;
+    for i in 0..16 {
+        lo = (lo << 8) | pk[i] as u128;
+    }
+    for i in 16..32 {
+        hi = (hi << 8) | pk[i] as u128;
+    }
+    let lo_field = BytesN::from_array(env, &u128_limb_to_field_bytes(lo));
+    let hi_field = BytesN::from_array(env, &u128_limb_to_field_bytes(hi));
+    poseidon2_hash2(env, &lo_field, &hi_field)
+}
+
 pub fn zeroes_for_tree(env: &Env) -> alloc::vec::Vec<BytesN<32>> {
     let mut zeroes = alloc::vec::Vec::with_capacity(TREE_DEPTH as usize + 1);
     let mut cur = BytesN::from_array(env, &[0u8; 32]);

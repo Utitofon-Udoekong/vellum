@@ -3,7 +3,7 @@ import { parseField } from "./commitment";
 import { simulateIncrementalInserts } from "./merkle";
 import { splitPubkeyLimbs } from "./pubkey";
 import { recipientIdFromAddress } from "./pubkey";
-import { assertWithdrawWitness, buildWithdrawWitness } from "./witness";
+import { assertWithdrawWitness, buildWithdrawWitness, packWithdrawPublicInputs } from "./witness";
 import { commitmentFromNote } from "./commitment";
 import { noteSecretsForLeafIndex } from "./session";
 import { parseHumanAmount } from "./token-amount";
@@ -73,6 +73,7 @@ describe("buildWithdrawWitness", () => {
     );
 
     await assertWithdrawWitness(witness);
+    expect(parseField(witness.recipient_id)).toBe(note.recipientId);
   });
 
   it("builds a valid witness for leaf index 1 in a two-payee batch", async () => {
@@ -105,7 +106,40 @@ describe("buildWithdrawWitness", () => {
     );
 
     await assertWithdrawWitness(witness);
+    expect(parseField(witness.recipient_id)).toBe(note.recipientId);
     expect(parseField(witness.amount)).toBe(101n);
+  });
+
+  it("packWithdrawPublicInputs encodes 128 bytes with recipient_id", async () => {
+    const { batchNotes, root, paths } = await twoPayeeBatch();
+    const note = batchNotes[0];
+    const witness = await buildWithdrawWitness(
+      {
+        recipientId: note.recipientId,
+        pubkeyLo: note.pubkeyLo,
+        pubkeyHi: note.pubkeyHi,
+        amount: note.amount,
+        salt: note.salt,
+        privKey: note.privKey,
+        leafIndex: note.leafIndex,
+        payeeAddress: note.payeeAddress,
+      },
+      {
+        batchRootHex: Array.from(root)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(""),
+        pathSiblings: paths[0].siblings.map((s) => s.toString()),
+        pathBits: paths[0].bits.map((b) => b.toString()),
+      },
+      batchNotes.map((n) => ({
+        payeeAddress: n.payeeAddress,
+        amount: n.amount,
+        leafIndex: n.leafIndex,
+      })),
+    );
+    const packed = packWithdrawPublicInputs(witness);
+    expect(packed.length).toBe(128);
+    expect(parseField(witness.recipient_id)).toBe(note.recipientId);
   });
 
   /** Mirrors App.tsx prepare → localStorage → employeeWithdraw for both payee rows. */
@@ -183,6 +217,7 @@ describe("buildWithdrawWitness", () => {
         })),
       );
       await assertWithdrawWitness(witness);
+      expect(parseField(witness.recipient_id)).toBe(parseField(note.recipientId));
     }
   });
 });
